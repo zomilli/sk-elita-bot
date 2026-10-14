@@ -1,153 +1,56 @@
 import asyncio
-from aiogram import Bot, Dispatcher, F, types
+import logging
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message, ChatMemberUpdated
 from aiogram.filters import Command
-from aiogram.enums import ParseMode
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
+from aiohttp import web
 from database import init_db, log_event, get_daily_stats
 
-# ВСТАВЬ СЮДА СВОЙ ТОКЕН НИЖЕ
-TOKEN = "8545729872:AAEL4BGFH6MwKDNpLAvhudfQsIhZhln0nEw"
+# Токен вашего бота
+BOT_TOKEN = "8545729872:AAEL4BGFH6MwKDNpLAvhudfQsIhZhln0nEw"  # <--- Вставьте сюда ваш токен!
 
-# Создаем бота напрямую без прокси (для Render это идеально)
-bot = Bot(token=TOKEN)
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Временное хранилище длительности для кнопок завершения
-ended_chats_duration = {}
+# Инициализация БД
+init_db()
 
+@dp.message(Command("start"))
+async def cmd_start(message: Message):
+    await message.answer("Бот для отслеживания голосовых чатов запущен!")
 
-# --- СТАРТ ГЧ ---
-@dp.message(F.video_chat_started)
-async def on_voice_started(message: types.Message):
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="✋ Я организатор (отметиться)", 
-                    callback_data="claim_organizer"
-                )
-            ]
-        ]
-    )
-    
-    await message.reply(
-        "🎙 <b>Голосовой чат запущен!</b>\n"
-        "Организатор, нажмите кнопку ниже, чтобы зафиксировать за собой запуск:",
-        reply_markup=keyboard,
-        parse_mode=ParseMode.HTML
-    )
-
-@dp.callback_query(F.data == "claim_organizer")
-async def on_claim_organizer(callback: types.CallbackQuery):
-    member = await callback.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
-    if member.status not in ["creator", "administrator"]:
-        await callback.answer("❌ Нажимать эту кнопку могут только администраторы!", show_alert=True)
-        return
-
-    user = callback.from_user
-    label = f"@{user.username}" if user.username else user.first_name
-    
-    log_event(callback.message.chat.id, user.id, label, "started")
-    
-    await callback.message.edit_text(
-        f"🎙 Голосовой чат запустил(а): <b>{label}</b>",
-        parse_mode=ParseMode.HTML
-    )
-    await callback.answer("Успешно! Вы отмечены как организатор.")
-
-
-# --- ЗАВЕРШЕНИЕ ГЧ ---
-@dp.message(F.video_chat_ended)
-async def on_voice_ended(message: types.Message):
-    duration_sec = message.video_chat_ended.duration
-    
-    # Сохраняем длительность для этого сообщения
-    ended_chats_duration[message.message_id] = duration_sec
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🏁 Я завершил(а) ГЧ (отметиться)", 
-                    callback_data=f"claim_ender:{message.message_id}"
-                )
-            ]
-        ]
-    )
-
-    hours = duration_sec // 3600
-    minutes = (duration_sec % 3600) // 60
-    seconds = duration_sec % 60
-    time_str = f"{hours} ч " if hours > 0 else ""
-    time_str += f"{minutes} мин {seconds} сек"
-
-    await message.reply(
-        f"🏁 <b>Голосовой чат завершен.</b>\n"
-        f"⏱ Длительность: <b>{time_str}</b>\n\n"
-        f"Кто завершил чат? Нажмите кнопку ниже:",
-        reply_markup=keyboard,
-        parse_mode=ParseMode.HTML
-    )
-
-@dp.callback_query(F.data.startswith("claim_ender:"))
-async def on_claim_ender(callback: types.CallbackQuery):
-    member = await callback.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
-    if member.status not in ["creator", "administrator"]:
-        await callback.answer("❌ Нажимать эту кнопку могут только администраторы!", show_alert=True)
-        return
-
-    user = callback.from_user
-    label = f"@{user.username}" if user.username else user.first_name
-    
-    msg_id = int(callback.data.split(":")[1])
-    duration_sec = ended_chats_duration.get(msg_id, 0)
-
-    log_event(callback.message.chat.id, user.id, label, "ended", duration_sec)
-
-    hours = duration_sec // 3600
-    minutes = (duration_sec % 3600) // 60
-    seconds = duration_sec % 60
-    time_str = f"{hours} ч " if hours > 0 else ""
-    time_str += f"{minutes} мин {seconds} сек"
-
-    await callback.message.edit_text(
-        f"🏁 Голосовой чат завершил(а): <b>{label}</b>\n"
-        f"⏱ Длительность: <b>{time_str}</b>",
-        parse_mode=ParseMode.HTML
-    )
-    await callback.answer("Успешно! Вы отмечены как завершивший.")
-
-
-# --- СТАТИСТИКА ЗА ДЕНЬ ---
-@dp.message(Command("day_stats"))
-async def cmd_day_stats(message: types.Message):
+@dp.message(Command("stats"))
+async def cmd_stats(message: Message):
     stats = get_daily_stats(message.chat.id)
     if not stats:
-        await message.answer("📊 За сегодня активности в голосовых чатах еще не было.")
+        await message.answer("За сегодня активности в голосовых чатах не зафиксировано.")
         return
+    
+    text = "📊 **Статистика голосовых чатов за сегодня:**\n\n"
+    for user_label, started, ended, duration in stats:
+        mins = duration // 60
+        text += f"👤 **{user_label}**: {mins} мин. (Запусков: {started}, Завершений: {ended})\n"
+    
+    await message.answer(text, parse_mode="Markdown")
 
-    text = "📊 <b>Статистика голосовых чатов за сегодня (с обнулением в 00:00 МСК):</b>\n\n"
-    for idx, row in enumerate(stats, 1):
-        user_label, started, ended, total_sec = row
-        hours = total_sec // 3600
-        minutes = (total_sec % 3600) // 60
-        time_formatted = f"{hours} ч {minutes} мин" if hours > 0 else f"{minutes} мин"
-            
-        text += (
-            f"{idx}. {user_label}\n"
-            f"   • Запустил(а): <b>{started}</b> раз(а)\n"
-            f"   • Завершил(а): <b>{ended}</b> раз(а)\n"
-            f"   • Общее время: <b>{time_formatted}</b>\n\n"
-        )
+# Заглушка-сервер для Render (бесплатный тариф)
+async def handle_ping(request):
+    return web.Response(text="Bot is running!")
 
-    await message.answer(text, parse_mode=ParseMode.HTML)
-
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 10000)
+    await site.start()
 
 async def main():
-    init_db()
-    # Сброс вебхука перед поллингом
-    await bot.delete_webhook(drop_pending_updates=True)
+    # Запускаем легкий веб-сервер для порта Render
+    await start_web_server()
+    # Запускаем самого бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
