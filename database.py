@@ -1,13 +1,14 @@
 import sqlite3
-from datetime import datetime
 
 DB_NAME = "voice_stats.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    # Удаляем старую таблицу, чтобы структура обновилась без ошибок
+    cursor.execute('DROP TABLE IF EXISTS voice_logs')
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS voice_logs (
+        CREATE TABLE voice_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chat_id INTEGER,
             user_id INTEGER,
@@ -33,7 +34,6 @@ def log_event(chat_id: int, user_id: int, user_label: str, event_type: str, dura
 def get_daily_stats(chat_id: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # Сброс в 00:00 по МСК (UTC+3)
     cursor.execute('''
         SELECT 
             user_label,
