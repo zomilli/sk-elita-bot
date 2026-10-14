@@ -3,16 +3,14 @@ from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.client.session.aiohttp import AiohttpSession
 
-from database import init_db, log_event, get_weekly_stats
+from database import init_db, log_event, get_daily_stats
 
 # ВСТАВЬ СЮДА СВОЙ ТОКЕН НИЖЕ
 TOKEN = "8545729872:AAEL4BGFH6MwKDNpLAvhudfQsIhZhln0nEw"
 
-# Настройка бесплатного прокси PythonAnywhere
-session = AiohttpSession(proxy="http://proxy.server:3128")
-bot = Bot(token=TOKEN, session=session)
+# Создаем бота напрямую без прокси (для Render это идеально)
+bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 # Временное хранилище длительности для кнопок завершения
@@ -121,15 +119,15 @@ async def on_claim_ender(callback: types.CallbackQuery):
     await callback.answer("Успешно! Вы отмечены как завершивший.")
 
 
-# --- СТАТИСТИКА ---
-@dp.message(Command("week_stats"))
-async def cmd_week_stats(message: types.Message):
-    stats = get_weekly_stats(message.chat.id)
+# --- СТАТИСТИКА ЗА ДЕНЬ ---
+@dp.message(Command("day_stats"))
+async def cmd_day_stats(message: types.Message):
+    stats = get_daily_stats(message.chat.id)
     if not stats:
-        await message.answer("📊 За последние 7 дней активности не зафиксировано.")
+        await message.answer("📊 За сегодня активности в голосовых чатах еще не было.")
         return
 
-    text = "📊 <b>Статистика голосовых чатов за неделю:</b>\n\n"
+    text = "📊 <b>Статистика голосовых чатов за сегодня (с обнулением в 00:00 МСК):</b>\n\n"
     for idx, row in enumerate(stats, 1):
         user_label, started, ended, total_sec = row
         hours = total_sec // 3600
