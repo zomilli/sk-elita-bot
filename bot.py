@@ -1,7 +1,8 @@
+import os
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, ChatMemberUpdated
+from aiogram.types import Message
 from aiogram.filters import Command
 from aiohttp import web
 from database import init_db, log_event, get_daily_stats
@@ -35,7 +36,7 @@ async def cmd_stats(message: Message):
     
     await message.answer(text, parse_mode="Markdown")
 
-# Заглушка-сервер для Render (бесплатный тариф)
+# Заглушка веб-сервера для Render (чтобы он видел открытый порт)
 async def handle_ping(request):
     return web.Response(text="Bot is running!")
 
@@ -44,11 +45,14 @@ async def start_web_server():
     app.router.add_get('/', handle_ping)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 10000)
+    
+    # Render передает порт через переменную PORT, по умолчанию 10000
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
 async def main():
-    # Запускаем легкий веб-сервер для порта Render
+    # Запускаем мини-веб-сервер
     await start_web_server()
     # Запускаем самого бота
     await dp.start_polling(bot)
