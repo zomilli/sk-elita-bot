@@ -1,0 +1,5 @@
+services:
+  - type: web
+    name: sk-elita-bot
+    env: python
+    pythonVersion: 3.11.9
