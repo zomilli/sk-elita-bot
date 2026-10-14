@@ -7,22 +7,23 @@ from aiogram.filters import Command
 from aiohttp import web
 from database import init_db, log_event, get_daily_stats
 
-BOT_TOKEN = "8545729872:AAEL4BGFH6MwKDNpLAvhudfQsIhZhln0nEw"  # <--- Проверьте ваш токен
+# Вставьте ваш токен бота ниже
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAEL4BGFH6MwKDNpLAvhudfQsIhZhln0nEw")
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Инициализируем базу данных при запуске
 init_db()
 
-# Вспомогательная функция для проверки, является ли пользователь админом или создателем чата
+# Вспомогательная функция проверки прав администратора
 async def is_user_admin(chat_id: int, user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id, user_id)
         return member.status in ("creator", "administrator")
     except Exception:
-        # Если бот не смог проверить (например, приватный чат или ошибка прав), разрешаем по умолчанию
         return True
 
 @dp.message(Command("start"))
@@ -69,7 +70,7 @@ async def process_claim_start(callback: CallbackQuery):
     chat_id = callback.message.chat.id
     user = callback.from_user
     
-    # Проверяем, админ ли
+    # Проверка на админа
     if not await is_user_admin(chat_id, user.id):
         await callback.answer("⛔ Эта кнопка только для администраторов!", show_alert=True)
         return
@@ -79,10 +80,12 @@ async def process_claim_start(callback: CallbackQuery):
     await callback.message.edit_text(f"🎙 Голосовой чат запустил(а):\n@{user_label}")
     await callback.answer()
 
-# Завершение голосового чата — отправляем кнопку для завершившего
-@dp.message(F.video_chat_ended)
+# Завершение голосового чата — универсальная обработка события
+@dp.message(F.video_chat_ended | F.content_type.in_({"video_chat_ended", "voice_chat_ended"}))
 async def voice_chat_ended(message: Message):
-    duration = message.video_chat_ended.duration if message.video_chat_ended else 0
+    chat_ended_data = getattr(message, 'video_chat_ended', None) or getattr(message, 'voice_chat_ended', None)
+    duration = chat_ended_data.duration if chat_ended_data else 0
+    
     mins = duration // 60
     secs = duration % 60
     
@@ -100,7 +103,7 @@ async def process_claim_end(callback: CallbackQuery):
     chat_id = callback.message.chat.id
     user = callback.from_user
     
-    # Проверяем, админ ли
+    # Проверка на админа
     if not await is_user_admin(chat_id, user.id):
         await callback.answer("⛔ Эта кнопка только для администраторов!", show_alert=True)
         return
@@ -116,7 +119,7 @@ async def process_claim_end(callback: CallbackQuery):
     )
     await callback.answer()
 
-# Веб-сервер для Render
+# Веб-сервер для поддержания активности на Render
 async def handle_ping(request):
     return web.Response(text="Bot is running!")
 
