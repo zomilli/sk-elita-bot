@@ -5,7 +5,7 @@ DB_NAME = "voice_stats.db"
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # Удаляем старую таблицу, чтобы структура обновилась без ошибок
+    # Удаляем старую таблицу, если она была со старой структурой
     cursor.execute('DROP TABLE IF EXISTS voice_logs')
     cursor.execute('''
         CREATE TABLE voice_logs (
