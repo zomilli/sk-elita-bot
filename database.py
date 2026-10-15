@@ -19,6 +19,12 @@ def init_db():
         )
     ''')
     
+    # Автоматически добавляем колонку user_label, если база была создана ранее со старой структурой
+    cursor.execute("PRAGMA table_info(voice_logs)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'user_label' not in columns:
+        cursor.execute("ALTER TABLE voice_logs ADD COLUMN user_label TEXT")
+    
     # Таблица для полученных ачивок
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_achievements (
