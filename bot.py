@@ -8,7 +8,7 @@ from aiohttp import web
 from database import init_db, log_event, get_daily_stats
 
 # Вставьте ваш токен бота ниже
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAEL4BGFH6MwKDNpLAvhudfQsIhZhln0nEw")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAHXSSq2C9dfkcTN7Yr7zVM8yTmFGOWlwOg")
 
 logging.basicConfig(level=logging.INFO)
 
