@@ -21,14 +21,14 @@ dp = Dispatcher()
 # Инициализируем базу данных при запуске
 init_db()
 
-# Список всех доступных ачивок
+# Список всех доступных ачивок с крутыми названиями (без зачеркиваний)
 ACHIEVEMENTS_LIST = {
-    "first_gc": {"title": "🎙 Первый шаг", "desc": "Провести свой самый первый ГЧ"},
-    "1h_gc": {"title": "⏱ Спринтер", "desc": "Провести ГЧ длительностью более 1 часа"},
-    "3h_gc": {"title": "🏋️ Марафонец", "desc": "Провести ГЧ длительностью более 3 часов"},
-    "night_owl": {"title": "🌙 Ночная сова", "desc": "Завершить ГЧ в период с 00:00 до 05:00 МСК"},
-    "10_gcs": {"title": "👑 Голос сообщества", "desc": "Суммарно провести 10 голосовых чатов"},
-    "24h_total": {"title": "⏳ В эфире 24/7", "desc": "Набрать в сумме 24 часа проведённых ГЧ"},
+    "first_gc": {"title": "🎙 Раскочегарил микро", "desc": "Провести свой самый первый ГЧ"},
+    "1h_gc": {"title": "⚡ Час пик", "desc": "Провести ГЧ длительностью более 1 часа"},
+    "3h_gc": {"title": "🔥 Железный купол", "desc": "Провести ГЧ длительностью более 3 часов"},
+    "night_owl": {"title": "🦇 Ночной дозор", "desc": "Завершить ГЧ в период с 00:00 до 05:00 МСК"},
+    "10_gcs": {"title": "🎯 Легенда эфира", "desc": "Суммарно провести 10 голосовых чатов"},
+    "24h_total": {"title": "👑 Бессменный лидер", "desc": "Набрать в сумме 24 часа проведённых ГЧ"},
 }
 
 # Вспомогательная функция проверки прав администратора
@@ -89,9 +89,9 @@ async def check_and_grant_achievements(message: Message, user_id: int, user_labe
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    await message.answer("Бот для отслеживания голосовых чатов запущен!")
+    await message.answer("Бот для отслеживания голосовых чатов и ачивок запущен!")
 
-# Универсальная команда статистики (срабатывает на /day_stats, /day_stats@sk_elita_bot и на "статистика")
+# Универсальная команда статистики
 @dp.message(F.text.lower().startswith("/day_stats") | F.text.lower().in_({"статистика", "стат"}))
 async def cmd_day_stats(message: Message):
     stats = get_daily_stats(message.chat.id)
@@ -126,7 +126,7 @@ async def cmd_achievements(message: Message):
         if code in unlocked_codes:
             text += f"✅ **{info['title']}** — {info['desc']}\n"
         else:
-            text += f"🔒 ~~{info['title']}~~ — {info['desc']}\n"
+            text += f"🔒 _{info['title']}_ — {info['desc']}\n"
             
     await message.answer(text, parse_mode="Markdown")
 
@@ -147,7 +147,6 @@ async def process_claim_start(callback: CallbackQuery):
     chat_id = callback.message.chat.id
     user = callback.from_user
     
-    # Проверка на админа
     if not await is_user_admin(chat_id, user.id):
         await callback.answer("⛔ Эта кнопка только для администраторов!", show_alert=True)
         return
@@ -157,7 +156,6 @@ async def process_claim_start(callback: CallbackQuery):
     await callback.message.edit_text(f"🎙 Голосовой чат запустил(а):\n@{user_label}")
     await callback.answer()
     
-    # Проверка ачивок
     await check_and_grant_achievements(callback.message, user.id, user_label, 0)
 
 # Завершение голосового чата — универсальная обработка события
@@ -183,7 +181,6 @@ async def process_claim_end(callback: CallbackQuery):
     chat_id = callback.message.chat.id
     user = callback.from_user
     
-    # Проверка на админа
     if not await is_user_admin(chat_id, user.id):
         await callback.answer("⛔ Эта кнопка только для администраторов!", show_alert=True)
         return
@@ -199,7 +196,6 @@ async def process_claim_end(callback: CallbackQuery):
     )
     await callback.answer()
     
-    # Проверка ачивок
     await check_and_grant_achievements(callback.message, user.id, user_label, duration)
 
 # Веб-сервер для поддержания активности на Render
