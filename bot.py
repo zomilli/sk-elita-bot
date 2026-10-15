@@ -11,7 +11,7 @@ from database import (
     get_user_total_stats, give_achievement, get_user_achievements
 )
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAHXSSq2C9dfkcTN7Yr7zVM8yTmFGOWlwOg")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAHEH0WctycsezHDMS-4swI8iSmITkPqMT4")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -212,6 +212,8 @@ async def start_web_server():
     await site.start()
 
 async def main():
+    # Очищаем вебхук перед стартом
+    await bot.delete_webhook(drop_pending_updates=True)
     await start_web_server()
     await dp.start_polling(bot)
 
