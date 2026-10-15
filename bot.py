@@ -11,7 +11,7 @@ from database import (
     get_user_total_stats, give_achievement, get_user_achievements
 )
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAHEH0WctycsezHDMS-4swI8iSmITkPqMT4")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAGiLybB1cNP3rAW0oBhZX9y1WZmXBTRqLA")
 
 logging.basicConfig(level=logging.INFO)
 
