@@ -1,13 +1,16 @@
 import os
 import asyncio
 import logging
+from datetime import datetime
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiohttp import web
-from database import init_db, log_event, get_daily_stats
+from database import (
+    init_db, log_event, get_daily_stats, 
+    get_user_total_stats, give_achievement, get_user_achievements
+)
 
-# Вставьте ваш токен бота ниже
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAEL4BGFH6MwKDNpLAvhudfQsIhZhln0nEw")
 
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +21,16 @@ dp = Dispatcher()
 # Инициализируем базу данных при запуске
 init_db()
 
+# Список всех доступных ачивок
+ACHIEVEMENTS_LIST = {
+    "first_gc": {"title": "🎙 Первый шаг", "desc": "Провести свой самый первый ГЧ"},
+    "1h_gc": {"title": "⏱ Спринтер", "desc": "Провести ГЧ длительностью более 1 часа"},
+    "3h_gc": {"title": "🏋️ Марафонец", "desc": "Провести ГЧ длительностью более 3 часов"},
+    "night_owl": {"title": "🌙 Ночная сова", "desc": "Завершить ГЧ в период с 00:00 до 05:00 МСК"},
+    "10_gcs": {"title": "👑 Голос сообщества", "desc": "Суммарно провести 10 голосовых чатов"},
+    "24h_total": {"title": "⏳ В эфире 24/7", "desc": "Набрать в сумме 24 часа проведённых ГЧ"},
+}
+
 # Вспомогательная функция проверки прав администратора
 async def is_user_admin(chat_id: int, user_id: int) -> bool:
     try:
@@ -26,12 +39,60 @@ async def is_user_admin(chat_id: int, user_id: int) -> bool:
     except Exception:
         return True
 
+# Функция проверки и выдачи ачивок
+async def check_and_grant_achievements(message: Message, user_id: int, user_label: str, last_duration: int = 0):
+    chat_id = message.chat.id
+    total_started, total_ended, total_duration = get_user_total_stats(chat_id, user_id)
+    
+    unlocked = []
+
+    # 1. Первый ГЧ
+    if total_started >= 1 or total_ended >= 1:
+        if give_achievement(chat_id, user_id, "first_gc"):
+            unlocked.append(ACHIEVEMENTS_LIST["first_gc"])
+
+    # 2. Длительность одного ГЧ > 1 часа (3600 сек)
+    if last_duration >= 3600:
+        if give_achievement(chat_id, user_id, "1h_gc"):
+            unlocked.append(ACHIEVEMENTS_LIST["1h_gc"])
+
+    # 3. Длительность одного ГЧ > 3 часов (10800 сек)
+    if last_duration >= 10800:
+        if give_achievement(chat_id, user_id, "3h_gc"):
+            unlocked.append(ACHIEVEMENTS_LIST["3h_gc"])
+
+    # 4. Ночная сова (с 00:00 до 05:00 МСК)
+    current_hour = (datetime.utcnow().hour + 3) % 24
+    if 0 <= current_hour < 5:
+        if give_achievement(chat_id, user_id, "night_owl"):
+            unlocked.append(ACHIEVEMENTS_LIST["night_owl"])
+
+    # 5. 10 проведённых ГЧ
+    if (total_started + total_ended) >= 10:
+        if give_achievement(chat_id, user_id, "10_gcs"):
+            unlocked.append(ACHIEVEMENTS_LIST["10_gcs"])
+
+    # 6. Суммарно 24 часа в ГЧ (86400 сек)
+    if total_duration >= 86400:
+        if give_achievement(chat_id, user_id, "24h_total"):
+            unlocked.append(ACHIEVEMENTS_LIST["24h_total"])
+
+    # Отправляем сообщение, если получена новая ачивка
+    for ach in unlocked:
+        text = (
+            f"🎉 **ПОЗДРАВЛЯЕМ!** 🎉\n"
+            f"Пользователь @{user_label} разблокировал(а) новое достижение:\n\n"
+            f"🏆 **{ach['title']}**\n"
+            f"ℹ️ *{ach['desc']}*"
+        )
+        await message.answer(text, parse_mode="Markdown")
+
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     await message.answer("Бот для отслеживания голосовых чатов запущен!")
 
-# Команда статистики с обнулением в 00:00 МСК
-@dp.message(Command("day_stats"))
+# Универсальная команда статистики (срабатывает на /day_stats, /day_stats@sk_elita_bot и на "статистика")
+@dp.message(F.text.lower().startswith("/day_stats") | F.text.lower().in_({"статистика", "стат"}))
 async def cmd_day_stats(message: Message):
     stats = get_daily_stats(message.chat.id)
     if not stats:
@@ -51,6 +112,22 @@ async def cmd_day_stats(message: Message):
         text += f"   • Завершил(а): {ended} раз(а)\n"
         text += f"   • Общее время: {mins} мин\n\n"
     
+    await message.answer(text, parse_mode="Markdown")
+
+# Команда просмотра ачивок
+@dp.message(Command("achievements", "my_achievements"))
+async def cmd_achievements(message: Message):
+    user = message.from_user
+    user_label = user.username or user.first_name
+    unlocked_codes = get_user_achievements(message.chat.id, user.id)
+    
+    text = f"🏆 **Достижения пользователя @{user_label}:**\n\n"
+    for code, info in ACHIEVEMENTS_LIST.items():
+        if code in unlocked_codes:
+            text += f"✅ **{info['title']}** — {info['desc']}\n"
+        else:
+            text += f"🔒 ~~{info['title']}~~ — {info['desc']}\n"
+            
     await message.answer(text, parse_mode="Markdown")
 
 # Запуск голосового чата — отправляем кнопку для организатора
@@ -79,6 +156,9 @@ async def process_claim_start(callback: CallbackQuery):
     log_event(chat_id, user.id, user_label, 'started', 0)
     await callback.message.edit_text(f"🎙 Голосовой чат запустил(а):\n@{user_label}")
     await callback.answer()
+    
+    # Проверка ачивок
+    await check_and_grant_achievements(callback.message, user.id, user_label, 0)
 
 # Завершение голосового чата — универсальная обработка события
 @dp.message(F.video_chat_ended | F.content_type.in_({"video_chat_ended", "voice_chat_ended"}))
@@ -118,6 +198,9 @@ async def process_claim_end(callback: CallbackQuery):
         f"🏁 Голосовой чат завершил(а):\n@{user_label}\n⏱ Длительность: {mins} мин {secs} сек"
     )
     await callback.answer()
+    
+    # Проверка ачивок
+    await check_and_grant_achievements(callback.message, user.id, user_label, duration)
 
 # Веб-сервер для поддержания активности на Render
 async def handle_ping(request):
