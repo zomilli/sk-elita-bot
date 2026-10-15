@@ -11,7 +11,11 @@ from database import (
     get_user_total_stats, give_achievement, get_user_achievements
 )
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8545729872:AAGiLybB1cNP3rAW0oBhZX9y1WZmXBTRqLA")
+# Токен берется СТРОГО из переменных окружения (Environment) на Render
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    raise ValueError("ОШИБКА: Переменная BOT_TOKEN не задана в настройках Environment на Render!")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -21,7 +25,7 @@ dp = Dispatcher()
 # Инициализируем базу данных при запуске
 init_db()
 
-# Список всех доступных ачивок с крутыми названиями (без зачеркиваний)
+# Список всех доступных ачивок
 ACHIEVEMENTS_LIST = {
     "first_gc": {"title": "🎙 Раскочегарил микро", "desc": "Провести свой самый первый ГЧ"},
     "1h_gc": {"title": "⚡ Час пик", "desc": "Провести ГЧ длительностью более 1 часа"},
@@ -212,7 +216,7 @@ async def start_web_server():
     await site.start()
 
 async def main():
-    # Очищаем вебхук перед стартом
+    # Удаляем сторонние вебхуки при каждом запуске
     await bot.delete_webhook(drop_pending_updates=True)
     await start_web_server()
     await dp.start_polling(bot)
